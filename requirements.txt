@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+openai
+boto3
+srt
+ffmpeg-python
+pydantic
+python-multipart

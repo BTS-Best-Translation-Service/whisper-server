@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# 환경 설정 파일
+.env
+.env.*
+
+# 가상환경
+venv/
+ENV/
+env/
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+
+# 운영체제 별
+.DS_Store
+Thumbs.db
+
+# 로그 및 임시 파일
+*.log
+*.tmp
+
+# SRT 결과 파일 (원하면 제외 가능)
+*.srt
+
+# 파이썬 빌드 결과
+build/
+dist/
+*.egg-info/
+
+# Jupyter 노트북 체크포인트
+.ipynb_checkpoints/
+
+# AWS 자격 파일 (실수 방지)
+.aws/
+
+# 기타
+*.sqlite3
