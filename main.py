@@ -35,7 +35,7 @@ async def process_audio(background_tasks: BackgroundTasks, file: UploadFile = Fi
     background_tasks.add_task(os.remove, srt_path)
     
 
-    print("#7. 파일 직접 응답으로 반환")
+    print("#7. 파일 직접 응답")
     return FileResponse(
         path=srt_path,
         media_type="application/x-subrip", 
