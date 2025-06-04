@@ -1,35 +1,14 @@
-import subprocess
-
-def download_youtube_video(video_url: str):
-    cookie_path = "/home/ec2-user/cookies.txt"  # 쿠키 파일 경로 (본인 환경에 맞게 변경)
-
-    cmd = [
-        "yt-dlp",
-        "--cookies", cookie_path,
-        "-o", "downloaded_video.%(ext)s", 
-        video_url,
-    ]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print("다운로드 성공:", result.stdout)
-    except subprocess.CalledProcessError as e:
-        print("다운로드 실패:", e.stderr)
-        raise Exception(f"유튜브 다운로드 실패: {e.stderr}")
-
-
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 import os
-import yt_dlp
 import time
+from pytubefix import YouTube
 
 from app.whisper_utils import transcribe_audio
 from app.translate import translate_segments_batch
 from app.srt_generator import generate_srt
 from app.s3_uploader import upload_to_s3
-
 
 app = FastAPI()
 
@@ -63,26 +42,17 @@ async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks
 
     try:
         print("#1. YouTube에서 오디오 다운로드")
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': filename_prefix,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'no_warnings': True,
-            'cookiefile': '/home/ec2-user/cookies.txt',
-        }
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([video_url])
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"유튜브 다운로드 실패: {e}")
+        yt = YouTube(video_url)
+        audio_stream = yt.streams.filter(only_audio=True).first()
+        output_path = "./"
+        os.makedirs(output_path, exist_ok=True)
+        audio_file = audio_stream.download(output_path)
 
-        if not os.path.exists(audio_path):
-            raise HTTPException(status_code=500, detail="오디오 파일 생성 실패")
+        try:
+            os.rename(audio_file, audio_path)
+        except Exception as e:
+            print(f"파일 이름 변경 실패: {e}")
+            audio_path = audio_file  # fallback
 
         print("#2. Whisper 자막 추출")
         segments = None

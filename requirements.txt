@@ -6,3 +6,4 @@ srt
 ffmpeg-python
 pydantic
 python-multipart
+pytubefix
