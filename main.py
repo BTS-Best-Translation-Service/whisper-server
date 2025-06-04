@@ -1,3 +1,23 @@
+import subprocess
+
+def download_youtube_video(video_url: str):
+    cookie_path = "/home/ec2-user/cookies.txt"  # 쿠키 파일 경로 (본인 환경에 맞게 변경)
+
+    cmd = [
+        "yt-dlp",
+        "--cookies", cookie_path,
+        "-o", "downloaded_video.%(ext)s", 
+        video_url,
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        print("다운로드 성공:", result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("다운로드 실패:", e.stderr)
+        raise Exception(f"유튜브 다운로드 실패: {e.stderr}")
+
+
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
@@ -9,6 +29,7 @@ from app.whisper_utils import transcribe_audio
 from app.translate import translate_segments_batch
 from app.srt_generator import generate_srt
 from app.s3_uploader import upload_to_s3
+
 
 app = FastAPI()
 
