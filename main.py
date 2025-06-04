@@ -1,44 +1,100 @@
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from pydantic import BaseModel
+from fastapi.responses import FileResponse
+import os
+import yt_dlp
+import time
+
 from app.whisper_utils import transcribe_audio
 from app.translate import translate_segments_batch
 from app.srt_generator import generate_srt
 from app.s3_uploader import upload_to_s3
-from fastapi.responses import FileResponse
-import tempfile
-import shutil
-import os
 
 app = FastAPI()
 
+class AudioRequest(BaseModel):
+    userId: int
+    videoUrl: str
+
+def extract_youtube_video_id(url: str) -> str:
+    import urllib.parse as urlparse
+    query = urlparse.urlparse(url).query
+    params = urlparse.parse_qs(query)
+    return params.get("v", ["unknown"])[0]
+
+def cleanup_files(audio_path: str, srt_path: str):
+    for fpath in [audio_path, srt_path]:
+        if fpath and os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+                print(f"Deleted file: {fpath}")
+            except Exception as e:
+                print(f"파일 삭제 실패 ({fpath}): {e}")
 
 @app.post("/process-audio")
-async def process_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), video_id: str = Form(...)):
-    print("#1. 원본 오디오 파일 임시 저장")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[-1]) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        converted_audio_path = tmp.name
+async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks):
+    user_id = request.userId
+    video_url = request.videoUrl
+    video_id = extract_youtube_video_id(video_url)
+    filename_prefix = f"{user_id}-{video_id}"
+    audio_path = f"{filename_prefix}.mp3"
+    srt_path = None
 
-    print("#2. Whisper 자막 추출")
-    segments = transcribe_audio(converted_audio_path)
+    try:
+        print("#1. YouTube에서 오디오 다운로드")
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': filename_prefix,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'quiet': True,
+            'no_warnings': True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"유튜브 다운로드 실패: {e}")
 
-    print("#3. 변환된 파일 삭제 (안전하게 Whisper 이후)")
-    os.remove(converted_audio_path)
+        if not os.path.exists(audio_path):
+            raise HTTPException(status_code=500, detail="오디오 파일 생성 실패")
 
-    print("# 4. GPT 번역")
-    translated = translate_segments_batch(segments)
+        print("#2. Whisper 자막 추출")
+        segments = None
+        for attempt in range(3):
+            try:
+                segments = transcribe_audio(audio_path)
+                break
+            except Exception as e:
+                print(f"Whisper API 실패 시도 {attempt + 1}: {e}")
+                if attempt == 2:
+                    raise HTTPException(status_code=502, detail="Whisper API 호출 실패. 잠시 후 다시 시도하세요.")
+                time.sleep(2)
 
-    print("#5. SRT 파일 생성")
-    srt_path = generate_srt(translated, video_id)
+        print("#3. GPT 번역")
+        translated = translate_segments_batch(segments)
 
-    print("#6. S3 업로드 후에 로컬 파일 삭제")
-    s3_url = upload_to_s3(srt_path, f"{video_id}.srt")
-    background_tasks.add_task(os.remove, srt_path)
-    
+        print("#4. SRT 생성")
+        srt_path = generate_srt(translated, filename_prefix)
 
-    print("#7. 파일 직접 응답")
-    return FileResponse(
-        path=srt_path,
-        media_type="application/x-subrip", 
-        filename=f"{video_id}.srt"
-    )
+        print("#5. S3 업로드")
+        s3_key = f"{filename_prefix}.srt"
+        upload_to_s3(srt_path, s3_key)
 
+        print("#6. SRT 파일 반환")
+        background_tasks.add_task(cleanup_files, audio_path, srt_path)
+
+        return FileResponse(
+            path=srt_path,
+            media_type="application/x-subrip",
+            filename=s3_key
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 처리 중 오류 발생: {str(e)}")
