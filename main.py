@@ -73,6 +73,7 @@ async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks
             }],
             'quiet': True,
             'no_warnings': True,
+            'cookiefile': '/home/ec2-user/cookies.txt',
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
