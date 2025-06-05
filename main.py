@@ -9,6 +9,7 @@ from app.whisper_utils import transcribe_audio
 from app.translate import translate_segments_batch
 from app.srt_generator import generate_srt
 from app.s3_uploader import upload_to_s3
+from app.dlp_utils import download_audio_with_ytdlp
 
 app = FastAPI()
 
@@ -29,22 +30,21 @@ def cleanup_files(audio_path: str, srt_path: str):
 async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks):
     video_title = request.videoTitle
     video_url = request.videoUrl
-    audio_path = f"{video_title}.mp3"
     srt_path = None
 
     try:
         print("#1. YouTube에서 오디오 다운로드")
+        audio_path = download_audio_with_ytdlp(video_url, video_title)
+
+        """
+        #<pytube 버전>
+        audio_path = f"{video_title}.mp3"
         yt = YouTube(video_url)
         audio_stream = yt.streams.filter(only_audio=True).first()
         output_path = "./"
         os.makedirs(output_path, exist_ok=True)
-        audio_file = audio_stream.download(output_path)
-
-        try:
-            os.rename(audio_file, audio_path)
-        except Exception as e:
-            print(f"파일 이름 변경 실패: {e}")
-            audio_path = audio_file  # fallback
+        audio_file = audio_stream.download(output_path) 
+        """
 
         print("#2. Whisper 자막 추출")
         segments = None
