@@ -26,7 +26,7 @@ def cleanup_files(audio_path: str, srt_path: str):
             except Exception as e:
                 print(f"파일 삭제 실패 ({fpath}): {e}")
 
-@app.get("/process-audio")
+@app.post("/process-audio")
 async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks):
     video_title = request.videoTitle
     video_url = request.videoUrl
