@@ -22,6 +22,12 @@ class AudioRequest(BaseModel):
 def cleanup_files(audio_path: str, srt_path: str):
     for fpath in [audio_path, srt_path]:
         if fpath and os.path.exists(fpath):
+            abs_path = os.path.abspath(fpath)
+            example_dir = os.path.abspath('./example/')
+            if abs_path.startswith(example_dir):
+                print(f"예제 파일은 삭제하지 않음: {fpath}")
+                continue
+
             try:
                 os.remove(fpath)
                 print(f"Deleted file: {fpath}")
