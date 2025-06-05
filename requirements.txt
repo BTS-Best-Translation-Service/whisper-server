@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-openai
+openai==0.28.0
 boto3
 srt
 ffmpeg-python
