@@ -11,6 +11,7 @@ def download_audio_with_ytdlp(video_url: str, video_title: str) -> str:
             "--extract-audio",
             "--audio-format", "mp3",
             "-o", audio_path,
+            "--cookies cookies.txt",
             video_url
         ], check=True)
     except subprocess.CalledProcessError as e:
