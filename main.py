@@ -13,14 +13,8 @@ from app.s3_uploader import upload_to_s3
 app = FastAPI()
 
 class AudioRequest(BaseModel):
-    userId: int
+    videoTitle: str
     videoUrl: str
-
-def extract_youtube_video_id(url: str) -> str:
-    import urllib.parse as urlparse
-    query = urlparse.urlparse(url).query
-    params = urlparse.parse_qs(query)
-    return params.get("v", ["unknown"])[0]
 
 def cleanup_files(audio_path: str, srt_path: str):
     for fpath in [audio_path, srt_path]:
@@ -33,16 +27,14 @@ def cleanup_files(audio_path: str, srt_path: str):
 
 @app.post("/process-audio")
 async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks):
-    user_id = request.userId
+    video_title = request.videoTitle
     video_url = request.videoUrl
-    video_id = extract_youtube_video_id(video_url)
-    filename_prefix = f"{user_id}-{video_id}"
-    audio_path = f"{filename_prefix}.mp3"
+    audio_path = f"{video_title}.mp3"
     srt_path = None
 
     try:
         print("#1. YouTube에서 오디오 다운로드")
-        yt = YouTube(video_url, use_po_token=True, client="WEB")
+        yt = YouTube(video_url, client="WEB")
         audio_stream = yt.streams.filter(only_audio=True).first()
         output_path = "./"
         os.makedirs(output_path, exist_ok=True)
@@ -70,10 +62,10 @@ async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks
         translated = translate_segments_batch(segments)
 
         print("#4. SRT 생성")
-        srt_path = generate_srt(translated, filename_prefix)
+        srt_path = generate_srt(translated, video_title)
 
         print("#5. S3 업로드")
-        s3_key = f"{filename_prefix}.srt"
+        s3_key = f"{video_title}.srt"
         upload_to_s3(srt_path, s3_key)
 
         print("#6. SRT 파일 반환")
