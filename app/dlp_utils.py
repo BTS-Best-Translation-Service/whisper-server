@@ -4,7 +4,6 @@ import os
 def download_audio_with_ytdlp(video_url: str, video_title: str) -> str:
     audio_path = f"{video_title}.mp3"
     try:
-        # yt-dlp로 MP3 다운로드
         subprocess.run([
             "yt-dlp",
             "-f", "bestaudio",

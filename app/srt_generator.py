@@ -18,3 +18,25 @@ def generate_srt(segments: List[dict], video_id: str) -> str:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".srt", mode="w", encoding="utf-8") as f:
         f.write(srt_content)
         return f.name
+
+
+import re
+
+def parse_srt(srt_path):
+    with open(srt_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = r"(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.+?)\n(.+?)(?=\n\d+\n|\Z)"
+    matches = re.findall(pattern, content, re.DOTALL)
+
+    srt_list = []
+    for _, start, end, original, translation in matches:
+        srt_list.append({
+            "start": start.strip(),
+            "end": end.strip(),
+            "original": original.strip(),
+            "translation": translation.strip(),
+            "language": "en"  
+        })
+
+    return srt_list

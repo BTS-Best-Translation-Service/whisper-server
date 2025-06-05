@@ -1,13 +1,13 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 import os
 import time
 from pytubefix import YouTube
 
 from app.whisper_utils import transcribe_audio
 from app.translate import translate_segments_batch
-from app.srt_generator import generate_srt
+from app.srt_generator import generate_srt, parse_srt
 from app.s3_uploader import upload_to_s3
 from app.dlp_utils import download_audio_with_ytdlp
 
@@ -26,7 +26,7 @@ def cleanup_files(audio_path: str, srt_path: str):
             except Exception as e:
                 print(f"파일 삭제 실패 ({fpath}): {e}")
 
-@app.post("/process-audio")
+@app.get("/process-audio")
 async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks):
     video_title = request.videoTitle
     video_url = request.videoUrl
@@ -66,15 +66,20 @@ async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks
 
         print("#5. S3 업로드")
         s3_key = f"{video_title}.srt"
-        upload_to_s3(srt_path, s3_key)
+        s3_url = upload_to_s3(srt_path, s3_key)
 
         print("#6. SRT 파일 반환")
         background_tasks.add_task(cleanup_files, audio_path, srt_path)
 
-        return FileResponse(
-            path=srt_path,
-            media_type="application/x-subrip",
-            filename=s3_key
+        parsed_srt = parse_srt(srt_path)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "s3Link": s3_url,
+                "srt": parsed_srt
+            },
+            media_type="application/json; charset=utf-8"
         )
 
     except HTTPException:
