@@ -34,7 +34,7 @@ async def process_audio(request: AudioRequest, background_tasks: BackgroundTasks
 
     try:
         print("#1. YouTube에서 오디오 다운로드")
-        yt = YouTube(video_url, use_po_token=True)
+        yt = YouTube(video_url)
         audio_stream = yt.streams.filter(only_audio=True).first()
         output_path = "./"
         os.makedirs(output_path, exist_ok=True)
