@@ -30,7 +30,7 @@ def parse_srt(srt_path):
     matches = re.findall(pattern, content, re.DOTALL)
 
     srt_list = []
-    for _, start, end, original, translation in matches:
+    for _, start, end, translation, original in matches:
         srt_list.append({
             "start": start.strip(),
             "end": end.strip(),
