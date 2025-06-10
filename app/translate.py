@@ -1,29 +1,35 @@
 import openai
 from typing import List
+from collections import defaultdict
+from app.config import OPENAI_API_KEY
+
+openai.api_key = OPENAI_API_KEY
 
 def translate_segments_batch(segments: List[dict]) -> List[dict]:
-    all_texts = "\n".join([seg["text"] for seg in segments])
+    """
+    segments 내 같은 sentence_id를 가진 segment들을 하나의 문장으로 묶어서 번역 요청
+    번역 결과도 문장별로 이어서 한 줄에 나오도록 GPT에 지시
+    """
+    grouped_texts = defaultdict(list)
+    grouped_segments = defaultdict(list)
+    for seg in segments:
+        sid = seg.get("sentence_id", seg["start"])
+        grouped_texts[sid].append(seg["text"])
+        grouped_segments[sid].append(seg)
+
+    sentences = [" ".join(parts) for sid, parts in sorted(grouped_texts.items())]
 
     prompt = (
-        "Translate the following English text into natural and clear Korean. "
-        "The input text is provided line by line, but please be aware that some lines might be "
-        "grammatically incomplete fragments that belong to a larger, continuous sentence. "
-        "Your task is to translate this text naturally, ensuring that full sentences are translated cohesively, "
-        "even if they span multiple input lines. "
-        "It is CRUCIAL that your output maintains the *exact* same number of lines as the input, "
-        "and each translated line must correspond directly to its respective input line's content. "
-        "If an input line is a partial sentence, its translation should also be a partial sentence "
-        "that naturally fits the overall translated sentence flow. "
-        "Ensure perfect line-by-line alignment between the input and your translated output.\n"
-        "\n"
-        "Input text:\n"
-        + all_texts
+        "Translate the following English sentences into natural and clear Korean. "
+        "Each English sentence may be split into multiple parts, but translate each full sentence as one coherent sentence. "
+        "Output the Korean translation one sentence per line, preserving the sentence order.\n"
+        + "\n".join(sentences)
     )
 
     response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "당신은 뛰어난 번역가이며, 자연스러운 문장 흐름을 유지하면서 줄 단위 매핑을 정확하게 수행하는 데 전문적입니다."},
+            {"role": "system", "content": "You are a helpful translator."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.3,
@@ -32,14 +38,14 @@ def translate_segments_batch(segments: List[dict]) -> List[dict]:
     translations = response['choices'][0]['message']['content'].strip().split('\n')
 
     translated_segments = []
-    for i, seg in enumerate(segments):
-        translation_text = translations[i].strip() if i < len(translations) else ""
+    for (sid, segs), translation in zip(sorted(grouped_segments.items()), translations):
+        for seg in segs:
+            translated_segments.append({
+                "start": seg["start"],
+                "end": seg["end"],
+                "text": seg["text"],
+                "translation": translation.strip()
+            })
 
-        translated_segments.append({
-            "start": seg["start"],
-            "end": seg["end"],
-            "text": seg["text"],
-            "translation": translation_text
-        })
-
+    translated_segments.sort(key=lambda x: x["start"])
     return translated_segments
